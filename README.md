@@ -231,12 +231,6 @@ Instead of using your IP, get a free subdomain:
 
 ## Contributing
 
-Feel free to submit bugs or improvements via GitHub issues or pull requests.
-
----
-
-## Contributing
-
 Feel free to submit bug reports or improvements by opening an issue or pull request on the GitHub repository.
 
 

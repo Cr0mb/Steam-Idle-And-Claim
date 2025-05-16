@@ -1,12 +1,10 @@
-![image](https://github.com/user-attachments/assets/259cab77-b52c-4797-9e06-7609138b3f19)
+  <img src="https://github.com/user-attachments/assets/259cab77-b52c-4797-9e06-7609138b3f19" width="300" />
 
+  
+  # Slice Strip
 
+  **Slice Strip** is a powerful automated Steam bot designed to:
 
----
-
-# Slice Strip
-
-**Slice Strip** is a powerful automated Steam bot designed to:
 
 * Idle multiple Steam games simultaneously to gain playtime and earn trading cards.
 * Automatically detect and claim free and heavily discounted (80%+) Steam games.

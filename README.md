@@ -7,7 +7,7 @@
 
 
 * Idle multiple Steam games simultaneously to gain playtime and earn trading cards.
-* Automatically detect and claim free and heavily discounted (80%+) Steam games.
+* Automatically detect and claim free Steam games.
 * Send email notifications when a free game is successfully claimed.
 * Handle Steam Guard two-factor authentication (2FA) using shared secrets.
 * Check for promotions at randomized intervals between 1 to 6 hours, to mimic natural behavior.

@@ -1,6 +1,5 @@
   <img src="https://github.com/user-attachments/assets/259cab77-b52c-4797-9e06-7609138b3f19" width="300" />
 
-  
   # Slice Strip
 
   **Slice Strip** is a powerful automated Steam bot designed to:
@@ -26,6 +25,37 @@
 * Randomized checking intervals to avoid detection and appear human-like.
 * Simple HTTP API to remotely start and stop game idling.
 * Runs on Linux systems (Ubuntu recommended).
+
+---
+
+## Value Estimation
+
+Estimate how much value you gain from automatically claiming free Steam games.
+
+**Variables:**
+
+* `N_min`, `N_max`: Min/max free games per month
+* `a`: Claimable rate (e.g., 0.9 = 90%)
+* `V_min`, `V_max`: Min/max retail value per game
+* `C`: Games successfully claimed
+* `V_monthly_min/max`: Monthly value gain
+* `V_annual_min/max`: Annual value gain
+
+**Formulas:**
+
+* `C_min = a * N_min`, `C_max = a * N_max`
+* `V_monthly_min = C_min * V_min = a * N_min * V_min`
+* `V_monthly_max = C_max * V_max = a * N_max * V_max`
+* `V_annual_min = 12 * V_monthly_min = 12 * a * N_min * V_min`
+* `V_annual_max = 12 * V_monthly_max = 12 * a * N_max * V_max`
+
+**Example (with N\_min = 1, N\_max = 12, a = 0.9, V\_min = V\_max = \$10):**
+
+* `C_min = 0.9`, `C_max ≈ 11`
+* `V_monthly_min = $9`, `V_monthly_max = $110`
+* `V_annual_min = $108`, `V_annual_max = $1320`
+
+This means the script can potentially save **\$108–\$1320 per year** depending on activity and success rate.
 
 ---
 

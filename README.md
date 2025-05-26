@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/e3f1dc4c-b47f-46aa-8ba4-c12535ee3a11)
+![image](https://github.com/user-attachments/assets/8214d51e-faef-4e89-9822-b7495fad00e3)
 
 
   # Slice Strip

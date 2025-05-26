@@ -5,44 +5,78 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
-const figlet = require('figlet');
 const chalk = require('chalk');
 const http = require('http');
+const figlet = require('figlet');
 
 dotenv.config();
 
-// Steam login config
+figlet.text('Slice Strip', {
+  font: 'Standard',
+  horizontalLayout: 'default',
+  verticalLayout: 'default'
+}, function (err, data) {
+  if (err) {
+    console.log('Error generating title');
+    console.dir(err);
+    return;
+  }
+  console.log(chalk.blue(data));
+  console.log(chalk.yellow('Made by GitHub.com/Cr0mb\n'));
+});
+
+// Validate required environment variables
+['STEAM_USERNAME', 'STEAM_PASSWORD', 'STEAM_SHARED_SECRET', 'SENDER_EMAIL', 'SENDER_PASSWORD', 'RECEIVER_EMAIL'].forEach(key => {
+  if (!process.env[key]) {
+    console.error(chalk.red(`Missing required environment variable: ${key}`));
+    process.exit(1);
+  }
+});
+
 const username = process.env.STEAM_USERNAME;
 const password = process.env.STEAM_PASSWORD;
 const sharedSecret = process.env.STEAM_SHARED_SECRET;
-const twoFactorCode = SteamTotp.generateAuthCode(sharedSecret);
 
-const games = [730, 230410, 440, 105600, 70, 109600, 489830, 320, 1172380, 22320, 42700, 304930, 3205720, 729460, 550, 383150, 300, 620, 203140];
-const status = 1; // online
-
-
-// Email config
 const SENDER_EMAIL = process.env.SENDER_EMAIL;
 const SENDER_PASSWORD = process.env.SENDER_PASSWORD;
 const RECEIVER_EMAIL = process.env.RECEIVER_EMAIL;
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: SENDER_EMAIL, pass: SENDER_PASSWORD },
-});
+
+const games = [578080, 304930, 230410, 729460, 42700, 1222730, 414700, 1546990, 1547000, 242760, 281990, 383180];
+const status = 1; // Online
 
 const SENTRY_FILE = path.join(__dirname, 'sentry.bin');
-
 const SEEN_PROMOS_FILE = path.resolve(__dirname, 'seen_promotions.txt');
-const seenPromotions = new Set(fs.existsSync(SEEN_PROMOS_FILE) ? fs.readFileSync(SEEN_PROMOS_FILE, 'utf8').split('\n').filter(Boolean) : []);
 
-const client = new SteamUser();
-
-function sendEmail(subject, body) {
-  return transporter.sendMail({ from: SENDER_EMAIL, to: RECEIVER_EMAIL, subject, text: body });
+// Create seen_promotions.txt if it doesn't exist
+if (!fs.existsSync(SEEN_PROMOS_FILE)) {
+  fs.writeFileSync(SEEN_PROMOS_FILE, '', 'utf8');
 }
 
-function saveSeenPromotions(promos) {
-  fs.appendFileSync(SEEN_PROMOS_FILE, promos.map(p => p + '\n').join(''), 'utf8');
+let seenPromotions = new Set(
+  fs.readFileSync(SEEN_PROMOS_FILE, 'utf8').split('\n').filter(Boolean)
+);
+
+// Setup email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: SENDER_EMAIL,
+    pass: SENDER_PASSWORD,
+  },
+});
+
+async function sendEmail(subject, body) {
+  try {
+    await transporter.sendMail({
+      from: SENDER_EMAIL,
+      to: RECEIVER_EMAIL,
+      subject,
+      text: body,
+    });
+    console.log(chalk.green('📧 Email sent successfully.'));
+  } catch (err) {
+    console.error(chalk.red('Failed to send email:'), err);
+  }
 }
 
 function getAppIdFromLogoUrl(logoUrl) {
@@ -53,50 +87,48 @@ function getAppIdFromLogoUrl(logoUrl) {
 async function fetchAppDetails(appId) {
   try {
     const res = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}`);
-    return res.data[appId].success ? res.data[appId].data : null;
-  } catch {
+    if (res.data[appId]?.success) {
+      return res.data[appId].data;
+    }
+    return null;
+  } catch (err) {
+    console.error(chalk.red(`Error fetching details for appId ${appId}: ${err.message}`));
     return null;
   }
 }
 
-async function fetchPromotions(maxprice) {
+async function fetchPromotions(maxprice = 'free') {
   try {
     const res = await axios.get('https://store.steampowered.com/search/results/', {
-      params: { specials: '1', ndl: '1', json: '1', maxprice }
+      params: { specials: '1', ndl: '1', json: '1', maxprice },
     });
+
     const promos = [];
     for (const item of res.data.items || []) {
       const appId = getAppIdFromLogoUrl(item.logo || '');
       if (!appId || seenPromotions.has(item.name)) continue;
+
       const details = await fetchAppDetails(appId);
       if (!details) continue;
-      const { discount_percent, final } = details.price_overview || {};
-      const discount = discount_percent || 0;
-      const price = (final || 0) / 100;
-      if (discount >= 80 || price === 0.0) {
+
+      const { discount_percent = 0, final = 0 } = details.price_overview || {};
+      const discount = discount_percent;
+      const price = final / 100;
+
+      if (discount >= 80 || price === 0) {
         promos.push({
           title: item.name,
           discount,
           price,
-          app_id: parseInt(appId),
+          app_id: parseInt(appId, 10),
         });
       }
     }
     return promos;
   } catch (err) {
-    console.log(chalk.red(`✖ Error fetching promos: ${err.message}`));
+    console.error(chalk.red(`Error fetching promotions: ${err.message}`));
     return [];
   }
-}
-
-function claimFreeGames(appIds) {
-  return new Promise(resolve => {
-    client.requestFreeLicense(appIds, (err, granted) => {
-      if (err) console.error(chalk.red('✖ Error claiming games:'), err);
-      else console.log(chalk.green('✔ Game(s) claimed:'), granted);
-      resolve(granted);
-    });
-  });
 }
 
 function printPromo(p) {
@@ -110,62 +142,111 @@ function printPromo(p) {
   console.log(chalk.cyan('='.repeat(50)) + '\n');
 }
 
-// function to get a random interval between 1 and 6 hours (ms)
+function claimFreeGames(appIds) {
+  return new Promise((resolve) => {
+    if (!appIds.length) return resolve([]);
+
+    client.requestFreeLicense(appIds, (err, granted) => {
+      if (err) {
+        console.error(chalk.red('Error claiming games:'), err);
+        return resolve([]);
+      }
+
+      if (granted.length) {
+        console.log(chalk.green('🎁 Claimed games:'), granted.map(g => g.appid));
+      } else {
+        console.log(chalk.yellow('⚠ No new games claimed.'));
+      }
+
+      resolve(granted.map(g => g.appid));
+    });
+  });
+}
+
 function getRandomInterval() {
-  const min = 1 * 60 * 60 * 1000;  // 1 hour in ms
-  const max = 6 * 60 * 60 * 1000;  // 6 hours in ms
+  const min = 1 * 60 * 60 * 1000;  // 1 hour
+  const max = 6 * 60 * 60 * 1000;  // 6 hours
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 async function promoCheckerLoop() {
-  console.log(chalk.magenta(figlet.textSync('Slice Strip')));
-  console.log(chalk.green.bold('Made by GitHub.com/Cr0mb\n'));
-
   while (true) {
-    console.log(chalk.yellow('🔍 Checking for free games...'));
-    const promos = await fetchPromotions('free');
-    const newPromos = promos.filter(p => !seenPromotions.has(p.title));
-    if (newPromos.length) {
-      newPromos.forEach(printPromo);
-      const appIds = newPromos.map(p => p.app_id);
-      await claimFreeGames(appIds);
-      const body = newPromos.map(p => `${p.title} (${p.discount}%) - $${p.price}\nhttps://store.steampowered.com/app/${p.app_id}`).join('\n\n');
-      await sendEmail('🎉 New Free Steam Games Claimed!', body);
-      newPromos.forEach(p => seenPromotions.add(p.title));
-      saveSeenPromotions(newPromos.map(p => p.title));
-    } else {
-      console.log(chalk.gray('No new free games found.'));
+    try {
+      console.log(chalk.yellow('🔍 Checking for free games...'));
+      const promos = await fetchPromotions('free');
+      const newPromos = promos.filter(p => !seenPromotions.has(p.title));
+
+      if (newPromos.length) {
+        newPromos.forEach(printPromo);
+
+        await new Promise(r => setTimeout(r, 2000)); // Delay before claiming
+        const appIds = newPromos.map(p => p.app_id);
+        const claimed = await claimFreeGames(appIds);
+
+        if (claimed.length) {
+          const claimedPromos = newPromos.filter(p => claimed.includes(p.app_id));
+          const body = claimedPromos.map(p => 
+            `${p.title} (${p.discount}%) - $${p.price}\nhttps://store.steampowered.com/app/${p.app_id}`
+          ).join('\n\n');
+
+          await sendEmail('🎉 New Free Steam Games Claimed!', body);
+
+          for (const p of claimedPromos) {
+            seenPromotions.add(p.title);
+            fs.appendFileSync(SEEN_PROMOS_FILE, p.title + '\n', 'utf8');
+          }
+
+          console.log(chalk.green(`✅ Recorded ${claimedPromos.length} new claimed promotions.`));
+        }
+      } else {
+        console.log(chalk.gray('No new promotions found.'));
+      }
+
+      const waitTime = getRandomInterval();
+      console.log(chalk.blue(`⏳ Next check in ${(waitTime / (60 * 60 * 1000)).toFixed(2)} hours.`));
+      await new Promise(r => setTimeout(r, waitTime));
+    } catch (err) {
+      console.error(chalk.red('❌ Error in promo checker loop:'), err);
+      console.log(chalk.yellow('🔁 Retrying in 10 minutes...'));
+      await new Promise(r => setTimeout(r, 10 * 60 * 1000));
     }
-    const waitTime = getRandomInterval();
-    console.log(chalk.blue(`⏱ Next check in ${(waitTime / (60 * 60 * 1000)).toFixed(2)} hours.`));
-    await new Promise(r => setTimeout(r, waitTime));
   }
 }
 
-client.on('sentry', function (sentry) {
-  fs.writeFileSync(SENTRY_FILE, sentry);
-});
-
+const client = new SteamUser();
 const logOnOptions = {
   accountName: username,
   password: password,
-  twoFactorCode: twoFactorCode
+  twoFactorCode: SteamTotp.generateAuthCode(sharedSecret),
 };
 
 if (fs.existsSync(SENTRY_FILE)) {
   logOnOptions.shaSentryfile = fs.readFileSync(SENTRY_FILE);
 }
 
-client.logOn(logOnOptions);
+client.on('sentry', (sentry) => {
+  fs.writeFileSync(SENTRY_FILE, sentry);
+  console.log(chalk.green('✅ Sentry file saved.'));
+});
+
+client.on('error', (err) => {
+  console.error(chalk.red('Steam error:'), err.message);
+  if (err.message.includes('Incorrect login') || err.message.includes('Logon session')) {
+    if (fs.existsSync(SENTRY_FILE)) {
+      fs.unlinkSync(SENTRY_FILE);
+      console.log(chalk.yellow('🗑️ Removed stale sentry file.'));
+    }
+  }
+  process.exit(1);
+});
 
 client.on('loggedOn', () => {
-  console.log(chalk.green(`✔ Logged in as ${client.steamID}`));
+  console.log(chalk.green(`✔ Logged in as ${client.steamID.getSteam3RenderedID()}`));
   client.setPersona(status);
   client.gamesPlayed(games);
 
-  // Hourly refresh cycle
   setInterval(() => {
-    console.log(chalk.gray("🔄 Hourly cycle: stopping games..."));
+    console.log(chalk.gray("🛑 Hourly cycle: stopping games..."));
     client.gamesPlayed([]);
     setTimeout(() => {
       console.log(chalk.gray("▶️ Hourly cycle: starting games again..."));
@@ -176,6 +257,9 @@ client.on('loggedOn', () => {
   promoCheckerLoop();
 });
 
+client.logOn(logOnOptions);
+
+// Optional keep-alive HTTP server
 http.createServer((req, res) => {
   if (req.url === '/stop') {
     client.gamesPlayed([]);
@@ -186,7 +270,9 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('▶️ Started playing games.');
   } else {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('✔ I\'m alive.');
+    res.writeHead(404);
+    res.end('Not found.');
   }
-}).listen(8080, () => console.log(chalk.blue('🌐 Keep-alive server running on port 8080')));
+}).listen(3000, () => {
+  console.log(chalk.cyan('🌐 HTTP control server listening on port 3000'));
+});
